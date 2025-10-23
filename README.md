@@ -147,7 +147,6 @@ Accede a la versión desplegada (si está disponible) y comienza a formatear nú
 - [ ] Soporte multi-idioma (i18n).
 - [ ] Tests unitarios (Jest/Vitest).
 - [ ] API REST para procesamiento en lote desde backend.
-- [ ] Integración con el bot de Discord.
 
 ---
 
