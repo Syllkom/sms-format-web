@@ -93,3 +93,5 @@ Este proyecto está pensado como un prototipo. Si deseas contribuir:
 1. Abre una issue describiendo la propuesta.
 2. Crea un fork y envía un PR con cambios pequeños y documentados.
 3. Mantén el estilo del código comentado y añade tests para cambios en la lógica.
+
+## Demo: https://syllkom.github.io/sms-format-web/
