@@ -285,7 +285,7 @@
       }
       lines.push(`#${num}`);
       lines.push(formatted || `+${digits}`);
-      lines.push(digits || '');
+      // removed: lines.push(digits || '');
     });
     return lines.join('\n');
   }
