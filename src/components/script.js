@@ -8,10 +8,12 @@
   const copyPlusBtn = document.getElementById('copyPlusBtn');
   const copyAllBtn = document.getElementById('copyAllBtn');
   const copyCombinedBtn = document.getElementById('copyCombinedBtn');
+  const copyPairedBtn = document.getElementById('copyPairedBtn');
 
   const downloadPlusBtn = document.getElementById('downloadPlusBtn');
   const downloadAllBtn = document.getElementById('downloadAllBtn');
   const downloadCombinedBtn = document.getElementById('downloadCombinedBtn');
+  const downloadPairedBtn = document.getElementById('downloadPairedBtn');
 
   const clearBtn = document.getElementById('clearBtn');
   const sampleBtn = document.getElementById('sampleBtn');
@@ -31,10 +33,12 @@
   copyPlusBtn.addEventListener('click', () => copyOutput('plus'));
   copyAllBtn.addEventListener('click', () => copyOutput('formatted'));
   copyCombinedBtn.addEventListener('click', () => copyOutput('combined'));
+  copyPairedBtn.addEventListener('click', () => copyOutput('paired'));
 
   downloadPlusBtn.addEventListener('click', () => downloadOutput('plus'));
   downloadAllBtn.addEventListener('click', () => downloadOutput('formatted'));
   downloadCombinedBtn.addEventListener('click', () => downloadOutput('combined'));
+  downloadPairedBtn.addEventListener('click', () => downloadOutput('paired'));
 
   inputEl.addEventListener('keydown', (ev) => {
     if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') formatBtn.click();
@@ -228,7 +232,7 @@
       const right = document.createElement('div');
       right.className = 'out';
       // Prefer showing formatted if exists, otherwise plusOnly
-      right.textContent = r.formatted || r.plusOnly || (r.error ? `${r.error}` : '');
+      right.textContent = r.formatted || r.plusOnly || (r.error ? `❌ ${r.error}` : '');
 
       el.appendChild(left);
       el.appendChild(center);
@@ -282,11 +286,24 @@
       lines.push(`#${num}`);
       lines.push(formatted || `+${digits}`);
       lines.push(digits || '');
-      // add an empty line between entries for readability
-      // (optional: remove if you want tight listing)
-      //lines.push('');
     });
     return lines.join('\n');
+  }
+
+  // paired/enlistado: one line per entry: "<formatted>,<digits>"
+  function getPairedText() {
+    if (!lastResults || lastResults.length === 0) return '';
+    return lastResults.map(r => {
+      const digits = (r.plusOnly || '').replace(/^\+/, '');
+      let formatted = r.formatted;
+      if (!formatted && digits) {
+        const ccLen = detectCCLen(digits);
+        const cc = digits.slice(0, ccLen);
+        const local = digits.slice(ccLen);
+        formatted = local ? `+${cc} ${groupLocal(local)}` : `+${cc}`;
+      }
+      return `${formatted || `+${digits}`},${digits}`;
+    }).join('\n');
   }
 
   // Collect output and copy
@@ -295,7 +312,8 @@
     let btn = null;
     if (type === 'plus') { text = getPlusOnlyText(); btn = copyPlusBtn; }
     else if (type === 'formatted') { text = getFormattedText(); btn = copyAllBtn; }
-    else { text = getCombinedText(); btn = copyCombinedBtn; }
+    else if (type === 'combined') { text = getCombinedText(); btn = copyCombinedBtn; }
+    else { text = getPairedText(); btn = copyPairedBtn; }
 
     if (!text) return flash(btn || copyAllBtn, 'No hay resultados');
     try {
@@ -306,14 +324,15 @@
     }
   }
 
-  // Download output type: 'plus'|'formatted'|'combined'
+  // Download output type: 'plus'|'formatted'|'combined'|'paired'
   function downloadOutput(type) {
     let text = '';
     let btn = null;
     let name = 'sms-output.txt';
     if (type === 'plus') { text = getPlusOnlyText(); btn = downloadPlusBtn; name = 'sms-plus-only.txt'; }
     else if (type === 'formatted') { text = getFormattedText(); btn = downloadAllBtn; name = 'sms-formatted.txt'; }
-    else { text = getCombinedText(); btn = downloadCombinedBtn; name = 'sms-enumerado.txt'; }
+    else if (type === 'combined') { text = getCombinedText(); btn = downloadCombinedBtn; name = 'sms-enumerado.txt'; }
+    else { text = getPairedText(); btn = downloadPairedBtn; name = 'sms-enlistado.txt'; }
 
     if (!text) return flash(btn || downloadAllBtn, 'No hay resultados');
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
@@ -337,7 +356,7 @@
 
   function updateActionButtonsState(){
     const has = lastResults && lastResults.length > 0;
-    [copyPlusBtn, copyAllBtn, copyCombinedBtn, downloadPlusBtn, downloadAllBtn, downloadCombinedBtn].forEach(b => {
+    [copyPlusBtn, copyAllBtn, copyCombinedBtn, copyPairedBtn, downloadPlusBtn, downloadAllBtn, downloadCombinedBtn, downloadPairedBtn].forEach(b => {
       b.disabled = !has;
       b.style.opacity = has ? '' : 0.5;
       if (!has) b.classList.remove('active');
