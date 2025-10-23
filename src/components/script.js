@@ -7,8 +7,11 @@
 
   const copyPlusBtn = document.getElementById('copyPlusBtn');
   const copyAllBtn = document.getElementById('copyAllBtn');
+  const copyCombinedBtn = document.getElementById('copyCombinedBtn');
+
   const downloadPlusBtn = document.getElementById('downloadPlusBtn');
   const downloadAllBtn = document.getElementById('downloadAllBtn');
+  const downloadCombinedBtn = document.getElementById('downloadCombinedBtn');
 
   const clearBtn = document.getElementById('clearBtn');
   const sampleBtn = document.getElementById('sampleBtn');
@@ -27,8 +30,11 @@
 
   copyPlusBtn.addEventListener('click', () => copyOutput('plus'));
   copyAllBtn.addEventListener('click', () => copyOutput('formatted'));
+  copyCombinedBtn.addEventListener('click', () => copyOutput('combined'));
+
   downloadPlusBtn.addEventListener('click', () => downloadOutput('plus'));
   downloadAllBtn.addEventListener('click', () => downloadOutput('formatted'));
+  downloadCombinedBtn.addEventListener('click', () => downloadOutput('combined'));
 
   inputEl.addEventListener('keydown', (ev) => {
     if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') formatBtn.click();
@@ -58,6 +64,8 @@
     updateStats(0,0,0);
     updateActionButtonsState();
   }
+
+  // --- Utilities & logic (improved with known CC matching) ---
 
   const KNOWN_CC = new Set([
     '1','7','20','27','30','31','32','33','34','36','39','40','41','43','44','49',
@@ -240,59 +248,87 @@
     });
   }
 
-  // Collect output text for copy/download using lastResults (reliable)
-  function getAllText(variant = 'formatted') {
-    // variant: 'formatted' or 'plus'
+  // --- OUTPUT BUILDERS ---
+
+  // formatted: one formatted per line (preferred)
+  function getFormattedText() {
+    if (!lastResults || lastResults.length === 0) return '';
+    return lastResults.map(r => (r.formatted || r.plusOnly || '')).filter(Boolean).join('\n');
+  }
+
+  // plus-only: +digits per line
+  function getPlusOnlyText() {
+    if (!lastResults || lastResults.length === 0) return '';
+    return lastResults.map(r => r.plusOnly).filter(Boolean).join('\n');
+  }
+
+  // combined enumerated:
+  // #1
+  // +<formateado>   (if available) else +<digits>
+  // <digits (sin +)>
+  function getCombinedText() {
     if (!lastResults || lastResults.length === 0) return '';
     const lines = [];
-    lastResults.forEach(r => {
-      if (!r) return;
-      if (variant === 'plus') {
-        if (r.plusOnly) lines.push(r.plusOnly);
-      } else {
-        // prefer formatted, fallback to reconstruct formatting if missing
-        if (r.formatted) lines.push(r.formatted);
-        else if (r.plusOnly) {
-          // rebuild formatted if needed
-          const digits = r.plusOnly.replace(/^\+/, '');
-          const ccLen = detectCCLen(digits);
-          const cc = digits.slice(0, ccLen);
-          const local = digits.slice(ccLen);
-          if (!local) lines.push(`+${cc}`);
-          else lines.push(`+${cc} ${groupLocal(local)}`);
-        }
+    lastResults.forEach((r, idx) => {
+      const num = idx + 1;
+      const digits = (r.plusOnly || '').replace(/^\+/, '');
+      let formatted = r.formatted;
+      if (!formatted && digits) {
+        const ccLen = detectCCLen(digits);
+        const cc = digits.slice(0, ccLen);
+        const local = digits.slice(ccLen);
+        formatted = local ? `+${cc} ${groupLocal(local)}` : `+${cc}`;
       }
+      lines.push(`#${num}`);
+      lines.push(formatted || `+${digits}`);
+      lines.push(digits || '');
+      // add an empty line between entries for readability
+      // (optional: remove if you want tight listing)
+      //lines.push('');
     });
     return lines.join('\n');
   }
 
-  async function copyOutput(variant){
-    const text = getAllText(variant === 'plus' ? 'plus' : 'formatted');
-    const btn = variant === 'plus' ? copyPlusBtn : copyAllBtn;
-    if (!text) return flash(btn, 'No hay resultados');
+  // Collect output and copy
+  async function copyOutput(type) {
+    let text = '';
+    let btn = null;
+    if (type === 'plus') { text = getPlusOnlyText(); btn = copyPlusBtn; }
+    else if (type === 'formatted') { text = getFormattedText(); btn = copyAllBtn; }
+    else { text = getCombinedText(); btn = copyCombinedBtn; }
+
+    if (!text) return flash(btn || copyAllBtn, 'No hay resultados');
     try {
       await navigator.clipboard.writeText(text);
-      flash(btn, 'Copiado ✓', 1200);
+      flash(btn || copyAllBtn, 'Copiado ✓', 1200);
     } catch (e) {
-      flash(btn, 'Error al copiar', 1200, true);
+      flash(btn || copyAllBtn, 'Error al copiar', 1200, true);
     }
   }
 
-  function downloadOutput(variant){
-    const text = getAllText(variant === 'plus' ? 'plus' : 'formatted');
-    const btn = variant === 'plus' ? downloadPlusBtn : downloadAllBtn;
-    if (!text) return flash(btn, 'No hay resultados');
+  // Download output type: 'plus'|'formatted'|'combined'
+  function downloadOutput(type) {
+    let text = '';
+    let btn = null;
+    let name = 'sms-output.txt';
+    if (type === 'plus') { text = getPlusOnlyText(); btn = downloadPlusBtn; name = 'sms-plus-only.txt'; }
+    else if (type === 'formatted') { text = getFormattedText(); btn = downloadAllBtn; name = 'sms-formatted.txt'; }
+    else { text = getCombinedText(); btn = downloadCombinedBtn; name = 'sms-enumerado.txt'; }
+
+    if (!text) return flash(btn || downloadAllBtn, 'No hay resultados');
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = variant === 'plus' ? 'sms-plus-only.txt' : 'sms-formatted.txt';
+    a.download = name;
     a.click();
     URL.revokeObjectURL(url);
-    flash(btn, 'Descargado ✓', 1200);
+    flash(btn || downloadAllBtn, 'Descargado ✓', 1200);
   }
 
+  // visual feedback helper
   function flash(btn, text, ms = 900, err = false){
+    if (!btn) return;
     const prev = btn.innerText;
     btn.innerText = text;
     btn.style.opacity = err ? 0.9 : 1;
@@ -301,7 +337,7 @@
 
   function updateActionButtonsState(){
     const has = lastResults && lastResults.length > 0;
-    [copyPlusBtn, copyAllBtn, downloadPlusBtn, downloadAllBtn].forEach(b => {
+    [copyPlusBtn, copyAllBtn, copyCombinedBtn, downloadPlusBtn, downloadAllBtn, downloadCombinedBtn].forEach(b => {
       b.disabled = !has;
       b.style.opacity = has ? '' : 0.5;
       if (!has) b.classList.remove('active');
